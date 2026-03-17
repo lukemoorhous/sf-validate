@@ -99,6 +99,37 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
 }
 
+json_get_first_string() {
+  local json_file="$1"
+  local query="$2"
+
+  [[ -f "$json_file" ]] || return 1
+
+  jq -er "$query | select(type == \"string\" and length > 0)" "$json_file" 2>/dev/null | head -n1
+}
+
+extract_job_id_from_json() {
+  local json_file="$1"
+
+  json_get_first_string "$json_file" '
+    .result.id //
+    .result.jobId //
+    .result.deployId //
+    .id //
+    .jobId //
+    .deployId
+  '
+}
+
+extract_status_from_json() {
+  local json_file="$1"
+
+  json_get_first_string "$json_file" '
+    .result.status //
+    .status
+  '
+}
+
 is_ci() {
   [[ -n "${CI:-}" ]]
 }
@@ -420,7 +451,7 @@ DEPLOY_ARGS=(
   project deploy validate
   --manifest "$PACKAGE_XML"
   --target-org "$TARGET_ORG"
-  --wait 120
+  --async
 )
 
 if [[ -f "$DESTRUCTIVE_XML" ]]; then
@@ -440,73 +471,89 @@ case "$TEST_LEVEL" in
     ;;
 esac
 
-exec 3>&1
-
 set +e
-VALIDATE_OUTPUT="$(
-  sf "${DEPLOY_ARGS[@]}" \
-    2> >(tee "$VALIDATION_STDERR" >&2) \
-    | tee >(cat >&3)
-)"
+sf "${DEPLOY_ARGS[@]}" \
+  --json \
+  > "$VALIDATION_JSON" \
+  2> >(tee "$VALIDATION_STDERR" >&2)
 VALIDATE_RC=$?
 set -e
 
-if [[ "$VALIDATE_RC" -ne 0 ]]; then
+if [[ "$VALIDATE_RC" -ne 0 && "$VALIDATE_RC" -ne 69 ]]; then
   echo "❌ Validate Failed" >&2
   if [[ "${DEBUG}" == true ]]; then
     echo "==> Deploy validate failed with exit code $VALIDATE_RC" >&2
+    echo "==> Validation JSON: $VALIDATION_JSON" >&2
     echo "==> Validation stderr: $VALIDATION_STDERR" >&2
+    [[ -s "$VALIDATION_JSON" ]] && cat "$VALIDATION_JSON" >&2 || true
     [[ -s "$VALIDATION_STDERR" ]] && cat "$VALIDATION_STDERR" >&2 || true
   fi
   exit "$VALIDATE_RC"
 fi
 
-JOB_ID="$(
-  printf '%s\n' "$VALIDATE_OUTPUT" \
-    | grep -Eo '0Af[A-Za-z0-9]+' \
-    | head -n1 \
-    || true
-)"
+JOB_ID="$(extract_job_id_from_json "$VALIDATION_JSON" || true)"
 
 [[ -n "$JOB_ID" ]] || die "Could not extract deploy job ID from validate output"
 
 [[ "${DEBUG}" == true ]] && debug_log "==> Validation job id: $JOB_ID"
+[[ "${DEBUG}" == true ]] && debug_log "==> Validation status: $(extract_status_from_json "$VALIDATION_JSON" || printf 'Unknown')"
 
 info_log "📡 Watching validation progress"
 
 set +e
-sf project deploy report \
+sf project deploy resume \
   --job-id "$JOB_ID" \
-  --target-org "$TARGET_ORG" \
   --wait 120
-REPORT_WAIT_RC=$?
+RESUME_RC=$?
 set -e
 
-if [[ "$REPORT_WAIT_RC" -ne 0 ]]; then
-  echo "❌ Validate Failed" >&2
-  if [[ "${DEBUG}" == true ]]; then
-    echo "==> Interactive report failed with exit code $REPORT_WAIT_RC" >&2
-    echo "==> Job ID: $JOB_ID" >&2
-  fi
-  exit "$REPORT_WAIT_RC"
+if [[ "$RESUME_RC" -eq 69 ]]; then
+  echo "â³ Validation still running" >&2
+  echo "Job ID: $JOB_ID" >&2
+  exit "$RESUME_RC"
 fi
 
-if [[ "${DEBUG}" == true ]]; then
-  debug_log "==> Fetching final JSON report..."
-fi
-
-if sf project deploy report \
+set +e
+sf project deploy report \
   --job-id "$JOB_ID" \
-  --target-org "$TARGET_ORG" \
-  --json > "$REPORT_JSON" 2> "$REPORT_STDERR"; then
-  [[ "${DEBUG}" == true ]] && debug_log "==> Final JSON report fetched"
-else
-  rc=$?
+  --json \
+  > "$REPORT_JSON" 2> "$REPORT_STDERR"
+REPORT_RC=$?
+set -e
+
+if [[ "$REPORT_RC" -eq 69 ]]; then
+  STATUS="$(extract_status_from_json "$REPORT_JSON" || printf 'InProgress')"
+  echo "Validation still running" >&2
+  echo "Job ID: $JOB_ID" >&2
+  echo "Status: $STATUS" >&2
+  echo "Report JSON: $REPORT_JSON" >&2
+  exit "$REPORT_RC"
+fi
+
+if [[ "$REPORT_RC" -ne 0 && ! -s "$REPORT_JSON" ]]; then
   echo "❌ Validate Failed" >&2
   if [[ "${DEBUG}" == true ]]; then
-    echo "==> Failed to fetch final JSON report with exit code $rc" >&2
+    echo "==> Report fetch failed with exit code $REPORT_RC" >&2
+    echo "==> Resume exit code: $RESUME_RC" >&2
+    echo "==> Job ID: $JOB_ID" >&2
     echo "==> Report JSON:   $REPORT_JSON" >&2
     echo "==> Report stderr: $REPORT_STDERR" >&2
+    [[ -s "$REPORT_JSON" ]] && cat "$REPORT_JSON" >&2 || true
+    [[ -s "$REPORT_STDERR" ]] && cat "$REPORT_STDERR" >&2 || true
+  fi
+  exit "$REPORT_RC"
+fi
+
+if [[ -s "$REPORT_JSON" ]]; then
+  [[ "${DEBUG}" == true ]] && debug_log "==> Final JSON report fetched"
+else
+  rc=1
+  echo "❌ Validate Failed" >&2
+  if [[ "${DEBUG}" == true ]]; then
+    echo "==> Report JSON file was not created" >&2
+    echo "==> Report JSON:   $REPORT_JSON" >&2
+    echo "==> Report stderr: $REPORT_STDERR" >&2
+    [[ -s "$REPORT_JSON" ]] && cat "$REPORT_JSON" >&2 || true
     [[ -s "$REPORT_STDERR" ]] && cat "$REPORT_STDERR" >&2 || true
   fi
   exit "$rc"
