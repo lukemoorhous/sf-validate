@@ -2,7 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VALIDATE_SOURCE="$SCRIPT_DIR/src/validate.sh"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+VALIDATE_SOURCE="$REPO_ROOT/src/validate.sh"
 
 if [[ ! -f "$VALIDATE_SOURCE" ]]; then
   echo "error: cannot find $VALIDATE_SOURCE" >&2
