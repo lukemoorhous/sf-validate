@@ -488,14 +488,17 @@ case "$TEST_LEVEL" in
 esac
 
 set +e
+# Allow sf to exit with non-zero codes while we inspect the JSON output.
+trap - ERR
 sf "${DEPLOY_ARGS[@]}" \
   --json \
   > "$VALIDATION_JSON" \
   2> >(tee "$VALIDATION_STDERR" >&2)
 VALIDATE_RC=$?
+trap 'on_error' ERR
 set -e
 
-if [[ "$VALIDATE_RC" -ne 0 && "$VALIDATE_RC" -ne 69 ]]; then
+if [[ "$VALIDATE_RC" -ne 0 && "$VALIDATE_RC" -ne 1 && "$VALIDATE_RC" -ne 69 ]]; then
   echo "❌ Validate Failed" >&2
   if [[ "${DEBUG}" == true ]]; then
     echo "==> Deploy validate failed with exit code $VALIDATE_RC" >&2

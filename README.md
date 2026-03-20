@@ -57,6 +57,8 @@ or `source ~/.bashrc` after running the installer before invoking `validate`.
 validate [options]
 ```
 
+> Because `validate` always runs `sf project deploy validate --async --json`, a nonzero exit (typically 1 or 69) while the job is queued is treated as expected; the script still pulls the job ID from the JSON payload and keeps watching the validation until it completes.
+
 ### Defaults
 
 | Setting | Default |
@@ -71,6 +73,8 @@ validate [options]
 | Test level | `RunRelevantTests` |
 | Source dir | `force-app/main` |
 | SGD ignore | `<repo root>/.sgdignore` (override with `-i/--sgdignore`) |
+
+> The validation step tolerates the Salesforce CLI returning exit code 1 (queued) or 69 (pending) and continues monitoring the job via the extracted job ID whenever the deployment status is not yet final.
 
 ### Options
 
@@ -123,6 +127,8 @@ validate -o ./tmp/custom-run
 # Use a custom ignore file for delta generation
 validate -i ./configs/.sgdignore
 ```
+
+> Because the wrapper already handles the CLI’s queued/pending exit codes (1/69), you don’t need to rerun `validate` manually—any job that is still initializing is automatically resumed until the report is available.
 
 ## Output
 
