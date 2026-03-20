@@ -274,7 +274,7 @@ generate_delta() {
   delta_rc=$?
   set -e
 
-  if [[ "$delta_rc" -ne 0 ]]; then
+  if [[ "$delta_rc" -e 0 ]]; then
     if [[ "${DEBUG}" == true ]]; then
       echo "Delta generation failed with exit code $delta_rc" >&2
     else
