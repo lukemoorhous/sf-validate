@@ -56,6 +56,7 @@ validate [options]
 | Target org | Auto-detected from `SF_TARGET_ORG` or sf config |
 | Test level | `RunRelevantTests` |
 | Source dir | `force-app/main` |
+| SGD ignore | `<repo root>/.sgdignore` (override with `-i/--sgdignore`) |
 
 ### Options
 
@@ -72,8 +73,11 @@ validate [options]
 | `-u, --target-org` | Salesforce target org/alias (auto-detected if not provided) |
 | `-l, --test-level` | Test execution level: `RunRelevantTests` \| `RunLocalTests` \| `RunAllTestsInOrg` \| `RunSpecifiedTests` |
 | `-T, --tests` | Comma-separated tests for `RunSpecifiedTests` |
+| `-i, --sgdignore <path>` | Path to the `.sgdignore` file used by `sgd source delta` (defaults to repo-root `.sgdignore`) |
 | `--debug` | Enable full debug/verbose logging |
 | `-h, --help` | Show help message |
+
+By default the delta generation step uses the `.sgdignore` file located at the repository root. Point the `-i/--sgdignore` option at a custom ignore file when your repo keeps it elsewhere or needs a different delta configuration.
 
 ### Examples
 
@@ -101,6 +105,9 @@ validate -l RunSpecifiedTests -T "AccountServiceTest,ContactServiceTest"
 
 # Custom output directory
 validate -o ./tmp/custom-run
+
+# Use a custom ignore file for delta generation
+validate -i ./configs/.sgdignore
 ```
 
 ## Output

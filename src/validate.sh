@@ -27,6 +27,7 @@ TEST_LEVEL="RunRelevantTests"
 TESTS=""
 SKIP_DELTA=false
 MANIFEST_PATH=""
+SGD_IGNORE_FILE=""
 
 usage() {
 cat <<EOF
@@ -43,6 +44,7 @@ Defaults:
   target org    = auto-detect from env or sf config
   test level    = RunRelevantTests
   source dir    = force-app/main
+  sgd ignore    = <repo root>/.sgdignore
 
 Options:
   -b, --branch               Working branch name; defaults to current branch
@@ -57,6 +59,7 @@ Options:
                              Default: auto-detect from SF_TARGET_ORG or sf config
   -l, --test-level           RunRelevantTests | RunLocalTests | RunAllTestsInOrg | RunSpecifiedTests
   -T, --tests                Comma-separated tests for RunSpecifiedTests
+  -i, --sgdignore <path>     Path to the .sgdignore file for sgd source delta (default: repo root/.sgdignore)
       --debug                Enable full debug / verbose logging
   -h, --help                 Show this help
 
@@ -239,6 +242,7 @@ generate_delta() {
   local to_sha="$3"
   local source_dir="$4"
   local output_dir="$5"
+  local sgd_ignore_file="${6-}"
 
   mkdir -p "$output_dir"
 
@@ -256,12 +260,11 @@ generate_delta() {
     -o "$output_dir"
     --generate-delta
     --source-dir "$source_dir"
-    -i .sgdignore
     -W
   )
 
-  if [[ -f "${REPO_ROOT}/.sgdignore" ]]; then
-    delta_args+=( -i "${REPO_ROOT}/.sgdignore" )
+  if [[ -n "$sgd_ignore_file" && -f "$sgd_ignore_file" ]]; then
+    delta_args+=( -i "$sgd_ignore_file" )
   fi
 
   local delta_rc=0
@@ -343,6 +346,11 @@ while [[ $# -gt 0 ]]; do
       TESTS="$2"
       shift 2
       ;;
+    -i|--sgdignore)
+      require_value "$1" "${2-}"
+      SGD_IGNORE_FILE="$2"
+      shift 2
+      ;;
     --debug)
       DEBUG=true
       shift
@@ -393,6 +401,12 @@ fi
 
 OUTPUT_ROOT="$(resolve_path "$OUTPUT_ROOT")"
 
+if [[ -z "$SGD_IGNORE_FILE" ]]; then
+  SGD_IGNORE_FILE="$(resolve_path '.sgdignore')"
+else
+  SGD_IGNORE_FILE="$(resolve_path "$SGD_IGNORE_FILE")"
+fi
+
 DELTA_DIR="${OUTPUT_ROOT}/changed-sources"
 VALIDATION_JSON="${OUTPUT_ROOT}/validation.json"
 VALIDATION_STDERR="${OUTPUT_ROOT}/validation.stderr.log"
@@ -420,6 +434,7 @@ if [[ "${DEBUG}" == true ]]; then
   debug_log "==> Output root:   $OUTPUT_ROOT"
   debug_log "==> Delta dir:     $DELTA_DIR"
   debug_log "==> Source dir:    $SOURCE_DIR"
+  debug_log "==> SGD ignore:    $SGD_IGNORE_FILE"
   debug_log "==> Skip delta:    $SKIP_DELTA"
   [[ -n "$MANIFEST_PATH" ]] && debug_log "==> Manifest:      $PACKAGE_XML"
   debug_log "==> Target org:    $TARGET_ORG"
@@ -432,7 +447,7 @@ if [[ "$SKIP_DELTA" == true ]]; then
   debug_log "==> Skipping delta generation"
   debug_log "==> Using manifest: $PACKAGE_XML"
 else
-  generate_delta "$BRANCH" "$FROM_SHA" "$TO_SHA" "$SOURCE_DIR" "$DELTA_DIR"
+  generate_delta "$BRANCH" "$FROM_SHA" "$TO_SHA" "$SOURCE_DIR" "$DELTA_DIR" "$SGD_IGNORE_FILE"
 
   if [[ "${DEBUG}" == true ]]; then
     debug_log "==> Delta contents:"
