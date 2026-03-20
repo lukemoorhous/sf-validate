@@ -520,13 +520,15 @@ JOB_ID="$(extract_job_id_from_json "$VALIDATION_JSON" || true)"
 info_log "📡 Watching validation progress"
 
 set +e
+trap - ERR
 sf project deploy resume \
   --job-id "$JOB_ID" \
   --wait 120
 RESUME_RC=$?
+trap 'on_error' ERR
 set -e
 
-if [[ "$RESUME_RC" -eq 69 ]]; then
+if [[ "$RESUME_RC" -eq 69 || "$RESUME_RC" -eq 1 ]]; then
   echo "â³ Validation still running" >&2
   echo "Job ID: $JOB_ID" >&2
   exit "$RESUME_RC"

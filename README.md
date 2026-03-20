@@ -139,3 +139,5 @@ The script generates the following artifacts in the output root:
     report.stderr.log - Report retrieval stderr output
     coverage.json - Processed coverage and test summary
     changed-sources/ - Delta package with only changed files
+
+> The CLI can still be queueing a validation or resume job, so the wrapper treats exit codes 1 and 69 from `sf project deploy resume` as "still running" and reflows the job via its ID instead of treating those as hard failures.
