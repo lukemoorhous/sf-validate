@@ -256,6 +256,7 @@ generate_delta() {
     -o "$output_dir"
     --generate-delta
     --source-dir "$source_dir"
+    -i .sgdignore
     -W
   )
 
