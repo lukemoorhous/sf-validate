@@ -250,7 +250,7 @@ generate_delta() {
   debug_log
 
   local delta_args=(
-    sgd
+    sgd source delta
     -t "$to_sha"
     -f "$from_sha"
     -o "$output_dir"
