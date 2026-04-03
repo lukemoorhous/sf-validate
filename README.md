@@ -21,22 +21,14 @@ The `validate` command streamlines Salesforce validation workflows by:
 
 ## Installation
 
-Clone the repository and enter the project directory:
+Clone this repository and install it using an installer or for your OS / Terminal manually.
 
-```bash
-git clone https://github.com/lukemoorhous/sf-validate.git
-cd sf-validate
+### Git Bash for Windows
+
 ```
-
-### macOS / Linux
-
-Ensure the script is executable and run it directly or after installing it on your PATH:
-
-```bash
-chmod +x src/validate.sh
-./src/validate.sh [options]
-# or, once `src/validate.sh` is on your PATH,
-validate [options]
+git clone git@github.com:lukemoorhous/sf-validate
+cd sf-validate
+./installers/validate.sh
 ```
 
 ### Git Bash (Windows)
